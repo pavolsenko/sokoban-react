@@ -1,6 +1,6 @@
 import React from 'react';
 import {Stage, Layer, Rect} from 'react-konva';
-import {Map as ImmutableMap} from 'immutable';
+import {Map as ImmutableMap, List as ImmutableList} from 'immutable';
 
 import {ICoordinates, ILevel, ILevelSquare, TLevelGrid, TSquare} from './interfaces';
 
@@ -13,20 +13,31 @@ const SQUARE_WIDTH = 50;
 
 const Canvas: React.FC<ICanvasProps> = (props: ICanvasProps) => {
     const [levelGrid, setLevelGrid] = React.useState<TLevelGrid>(ImmutableMap());
+    const [boxesGrid, setBoxesGrid] = React.useState<TLevelGrid>(ImmutableMap());
+    const [goalsList, setGoalsList] = React.useState<ImmutableList<ICoordinates>>(ImmutableList());
     const [playerPosition, setPlayerPosition] = React.useState<ICoordinates>({row: 0, column: 0});
 
     let row = 0;
     let column = 0;
 
     React.useEffect(() => {
-        let tempGrid: TLevelGrid = ImmutableMap();
+        let tempLevelGrid: TLevelGrid = ImmutableMap();
+        let tempBoxesGrid: TLevelGrid = ImmutableMap();
+        let tempGoalsList: ImmutableList<ICoordinates> = ImmutableList();
 
         props.level.squares.forEach((square: ILevelSquare) => {
             for (let i = 0; i < square.length; i++) {
-                tempGrid = tempGrid.setIn([row.toString(), column.toString()], square.type);
-
                 if (square.type === 'player') {
                     setPlayerPosition({row, column});
+                    tempLevelGrid = tempLevelGrid.setIn([row.toString(), column.toString()], 'space');
+                } else if (square.type === 'box') {
+                    tempBoxesGrid = tempBoxesGrid.setIn([row.toString(), column.toString()], 'box');
+                    tempLevelGrid = tempLevelGrid.setIn([row.toString(), column.toString()], 'space');
+                } else if (square.type === 'goal') {
+                    tempGoalsList = tempGoalsList.push({row, column});
+                    tempLevelGrid = tempLevelGrid.setIn([row.toString(), column.toString()], 'goal');
+                } else {
+                    tempLevelGrid = tempLevelGrid.setIn([row.toString(), column.toString()], square.type);
                 }
 
                 column++;
@@ -37,65 +48,89 @@ const Canvas: React.FC<ICanvasProps> = (props: ICanvasProps) => {
             }
         });
 
-        setLevelGrid(tempGrid);
+        setLevelGrid(tempLevelGrid);
+        setBoxesGrid(tempBoxesGrid);
+        setGoalsList(tempGoalsList);
     }, [props.level]);
 
+    const checkLevelComplete = () => {
+        let levelWon = true;
+        goalsList.forEach((square: ICoordinates) => {
+            const box = boxesGrid.getIn([square.row.toString(), square.column.toString()]);
+
+            if (!box) {
+                levelWon = false;
+            }
+        });
+
+        return levelWon;
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
+        let square1row = '0';
+        let square1column = '0';
+        let square2row = '0';
+        let square2column = '0';
+
         if (event.key === 'ArrowUp') {
-            const fieldUp = levelGrid.getIn([(playerPosition.row - 1).toString(), playerPosition.column.toString()]);
-            const field2Up = levelGrid.getIn([(playerPosition.row - 2).toString(), playerPosition.column.toString()]);
+            square1row = (playerPosition.row - 1).toString();
+            square1column = playerPosition.column.toString();
 
-            if (fieldUp === 'wall' || (fieldUp === 'box' && (field2Up === 'wall' || field2Up === 'box'))) {
-                return;
-            }
-
-            if (fieldUp === 'box') {
-                const newGrid = levelGrid.setIn(
-                    [playerPosition.row.toString(), playerPosition.column.toString()],
-                    'space')
-                .setIn(
-                    [(playerPosition.row - 1).toString(), playerPosition.column.toString()],
-                    'box'
-                );
-
-                setLevelGrid(newGrid);
-            }
-
-            setPlayerPosition({row: playerPosition.row - 1, column: playerPosition.column});
+            square2row = (playerPosition.row - 2).toString();
+            square2column = playerPosition.column.toString();
         }
 
         if (event.key === 'ArrowRight') {
-            const fieldRight = levelGrid.getIn([playerPosition.row.toString(), (playerPosition.column + 1).toString()]);
-            const field2Right = levelGrid.getIn([playerPosition.row.toString(), (playerPosition.column + 2).toString()]);
+            square1row = playerPosition.row.toString();
+            square1column = (playerPosition.column + 1).toString();
 
-            if (fieldRight === 'wall' || (fieldRight === 'box' && (field2Right === 'wall' || field2Right === 'box'))) {
-                return;
-            }
-
-            setPlayerPosition({row: playerPosition.row, column: playerPosition.column + 1});
+            square2row = playerPosition.row.toString();
+            square2column = (playerPosition.column + 2).toString();
         }
 
         if (event.key === 'ArrowDown') {
-            const fieldDown = levelGrid.getIn([(playerPosition.row + 1).toString(), playerPosition.column.toString()]);
-            const field2Down = levelGrid.getIn([(playerPosition.row + 2).toString(), playerPosition.column.toString()]);
+            square1row = (playerPosition.row + 1).toString();
+            square1column = playerPosition.column.toString();
 
-            if (fieldDown === 'wall' || (fieldDown === 'box' && (field2Down === 'wall' || field2Down === 'box'))) {
-                return;
-            }
-
-            setPlayerPosition({row: playerPosition.row + 1, column: playerPosition.column});
+            square2row = (playerPosition.row + 2).toString();
+            square2column = playerPosition.column.toString();
         }
 
         if (event.key === 'ArrowLeft') {
-            const fieldLeft = levelGrid.getIn([playerPosition.row.toString(), (playerPosition.column - 1).toString()]);
-            const field2Left = levelGrid.getIn([playerPosition.row.toString(), (playerPosition.column - 2).toString()]);
+            square1row = playerPosition.row.toString();
+            square1column = (playerPosition.column - 1).toString();
 
-            if (fieldLeft === 'wall' || (fieldLeft === 'box' && (field2Left === 'wall' || field2Left === 'box'))) {
-                return;
-            }
-
-            setPlayerPosition({row: playerPosition.row, column: playerPosition.column - 1});
+            square2row = playerPosition.row.toString();
+            square2column = (playerPosition.column - 2).toString();
         }
+
+        const levelSquare1 = levelGrid.getIn([square1row, square1column]);
+        const levelSquare2 = levelGrid.getIn([square2row, square2column]);
+
+        const boxesSquare1 = boxesGrid.getIn([square1row, square1column]);
+        const boxesSquare2 = boxesGrid.getIn([square2row, square2column]);
+
+        if (levelSquare1 === 'wall') {
+            return;
+        }
+
+        if (boxesSquare1 === 'box' && levelSquare2 === 'wall') {
+            return;
+        }
+
+        if (boxesSquare1 === 'box' && boxesSquare2 === 'box') {
+            return;
+        }
+
+        if (boxesSquare1 === 'box') {
+            setBoxesGrid(
+                boxesGrid
+                    .setIn([square2row, square2column], 'box')
+                    .setIn([square1row, square1column], undefined),
+            );
+        }
+
+        setPlayerPosition({row: parseInt(square1row), column: parseInt(square1column)});
     }
 
     React.useEffect(() => {
@@ -120,18 +155,19 @@ const Canvas: React.FC<ICanvasProps> = (props: ICanvasProps) => {
             return 'brown';
         }
 
-        return 'white';
+        return '#dddddd';
     }
 
-    const renderLevel = (): JSX.Element[] => {
+    const renderLevelGrid = (): JSX.Element[] => {
         const result: JSX.Element[] = [];
 
         for (let row = 0; row < props.level.height; row++) {
             for (let column = 0; column < props.level.width; column++) {
                 const currentSquare: TSquare = levelGrid.getIn([row.toString(), column.toString()]);
+                let color = getColor(currentSquare);
 
                 if (currentSquare === 'player') {
-                    continue;
+                    color = getColor('space');
                 }
 
                 result.push(
@@ -141,13 +177,17 @@ const Canvas: React.FC<ICanvasProps> = (props: ICanvasProps) => {
                         y={row * SQUARE_HEIGHT}
                         width={SQUARE_WIDTH}
                         height={SQUARE_HEIGHT}
-                        fill={getColor(currentSquare)}
+                        fill={color}
                     />
                 );
             }
         }
 
-        result.push(
+        return result;
+    }
+
+    const renderPlayer = (): JSX.Element => {
+        return (
             <Rect
                 key={Math.random().toString()}
                 x={playerPosition.column * SQUARE_WIDTH}
@@ -158,8 +198,37 @@ const Canvas: React.FC<ICanvasProps> = (props: ICanvasProps) => {
                 cornerRadius={SQUARE_WIDTH / 2}
             />
         );
+    }
+
+    const renderBoxes = () => {
+        const result: JSX.Element[] = [];
+
+        for (let row = 0; row < props.level.height; row++) {
+            for (let column = 0; column < props.level.width; column++) {
+                const currentSquare: TSquare = boxesGrid.getIn([row.toString(), column.toString()]);
+
+                if (currentSquare !== 'box') {
+                    continue;
+                }
+
+                result.push(
+                    <Rect
+                        key={Math.random().toString()}
+                        x={column * SQUARE_WIDTH}
+                        y={row * SQUARE_HEIGHT}
+                        width={SQUARE_WIDTH}
+                        height={SQUARE_HEIGHT}
+                        fill={getColor('box')}
+                    />
+                );
+            }
+        }
 
         return result;
+    }
+
+    if (checkLevelComplete()) {
+        alert('level complete');
     }
 
     return (
@@ -168,7 +237,15 @@ const Canvas: React.FC<ICanvasProps> = (props: ICanvasProps) => {
             height={props.level.height * SQUARE_HEIGHT}
         >
             <Layer>
-                {renderLevel()}
+                {renderLevelGrid()}
+            </Layer>
+
+            <Layer>
+                {renderBoxes()}
+            </Layer>
+
+            <Layer>
+                {renderPlayer()}
             </Layer>
         </Stage>
     );
